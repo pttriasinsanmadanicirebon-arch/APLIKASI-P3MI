@@ -39,6 +39,25 @@ export interface CPMI {
     paspor: boolean;
     medicalCheck: boolean;
   };
+  attachments?: CPMIAttachment[];
+}
+
+export interface CPMIAttachment {
+  id: string; // unique ID
+  name: string; // filename
+  type: string; // MIME type
+  size: number; // size in bytes
+  uploadedAt: string; // ISO string locale timestamp
+  base64Data: string; // Real file data encoded as base64 string
+}
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  passwordHash: string; // stored as plain string for client portal
+  role: "Admin" | "Staff";
+  createdAt: string;
 }
 
 export type TransactionCategory =

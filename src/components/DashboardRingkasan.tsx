@@ -12,9 +12,10 @@ interface Props {
   cpmis: CPMI[];
   transactions: Transaction[];
   onNavigate: (tabId: string) => void;
+  ptName?: string;
 }
 
-export default function DashboardRingkasan({ cpmis, transactions, onNavigate }: Props) {
+export default function DashboardRingkasan({ cpmis, transactions, onNavigate, ptName }: Props) {
   // 1. Calculate General KPI Stats
   const totalCpmiCount = cpmis.length;
   
@@ -96,7 +97,7 @@ export default function DashboardRingkasan({ cpmis, transactions, onNavigate }: 
             GLOBAL HUMAN RESOURCE PORTAL
           </span>
           <h1 className="text-2xl md:text-4xl font-serif font-bold mt-3 tracking-tight">
-            PT. Trias Insan Madani
+            {ptName || "PT. Trias Insan Madani"}
           </h1>
           <p className="text-[#F9F6F1]/90 mt-2 text-sm md:text-base leading-relaxed">
             Monitor proses migrasi pekerja mandiri atau formal (CPMI) secara terpusat, catat pengeluaran operasional per individu, dan tinjau laporan keuangan kantor secara presisi dengan paduan gaya natural yang hangat.

@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { CPMI, Transaction, ProcessStatus } from "../types";
 import { formatRupiah, CPMI_STATUS_OPTIONS } from "../data/seedData";
 import { 
   Search, Filter, Plus, Edit2, CheckCircle2, XCircle, AlertCircle, FileText, 
-  MapPin, User, Building, Landmark, ChevronRight, ChevronLeft, Calendar, FileCheck, CheckSquare, Square
+  MapPin, User, Building, Landmark, ChevronRight, ChevronLeft, Calendar, FileCheck, CheckSquare, Square,
+  Trash2, Paperclip, Download
 } from "lucide-react";
 
 interface Props {
@@ -16,9 +17,14 @@ interface Props {
   transactions: Transaction[];
   onAddCpmi: (cpmi: CPMI) => void;
   onUpdateCpmi: (cpmi: CPMI) => void;
+  ptName?: string;
 }
 
-export default function CpmiDatabase({ cpmis, transactions, onAddCpmi, onUpdateCpmi }: Props) {
+export default function CpmiDatabase({ cpmis, transactions, onAddCpmi, onUpdateCpmi, ptName }: Props) {
+  // File upload state for Candidate attachments module
+  const [candDragActive, setCandDragActive] = useState(false);
+  const candFileRef = useRef<HTMLInputElement>(null);
+
   // Navigation & filtration states
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -42,7 +48,7 @@ export default function CpmiDatabase({ cpmis, transactions, onAddCpmi, onUpdateC
   const [formDestination, setFormDestination] = useState("Taiwan");
   const [formGender, setFormGender] = useState("Perempuan");
   const [formCategory, setFormCategory] = useState("TKW (In Formal)");
-  const [formAgency, setFormAgency] = useState("PT. TRIAS INSAN MADANI");
+  const [formAgency, setFormAgency] = useState(ptName || "PT. TRIAS INSAN MADANI");
   const [formRecruiter, setFormRecruiter] = useState("");
   const [formNotes, setFormNotes] = useState("");
   
@@ -70,6 +76,92 @@ export default function CpmiDatabase({ cpmis, transactions, onAddCpmi, onUpdateC
   const selectedCpmi = useMemo(() => {
     return cpmis.find((c) => c.id === selectedCpmiId) || null;
   }, [cpmis, selectedCpmiId]);
+
+  // Attachment upload and management handlers
+  const handleCandDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setCandDragActive(true);
+    } else if (e.type === "dragleave") {
+      setCandDragActive(false);
+    }
+  };
+
+  const handleCandDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCandDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      Array.from(e.dataTransfer.files).forEach((file: File) => {
+        uploadCandidateFile(file);
+      });
+    }
+  };
+
+  const handleCandFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      Array.from(e.target.files).forEach((file: File) => {
+        uploadCandidateFile(file);
+      });
+    }
+  };
+
+  const uploadCandidateFile = (file: File) => {
+    if (!selectedCpmi) return;
+
+    // Local Storage safety limit (3MB)
+    if (file.size > 3 * 1024 * 1024) {
+      alert(`Berkas "${file.name}" melebihi batas 3 MB! Harap unggah berkas yang lebih kecil.`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = e.target?.result as string;
+      const newAttachment = {
+        id: "ATT-" + Date.now() + "-" + Math.random().toString(36).substr(2, 5),
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        size: file.size,
+        uploadedAt: new Date().toISOString(),
+        base64Data: base64
+      };
+
+      const currentAttachments = selectedCpmi.attachments || [];
+      const updatedCpmi = {
+        ...selectedCpmi,
+        attachments: [...currentAttachments, newAttachment]
+      };
+
+      onUpdateCpmi(updatedCpmi);
+    };
+    reader.onerror = () => {
+      alert("Gagal mengonversi berkas ke format Base64.");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDownloadAttachment = (att: any) => {
+    const link = document.createElement("a");
+    link.href = att.base64Data;
+    link.download = att.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleDeleteAttachment = (attId: string) => {
+    if (!selectedCpmi) return;
+    if (confirm("Apakah Anda yakin ingin menghapus berkas lampiran ini?")) {
+      const filtered = (selectedCpmi.attachments || []).filter(a => a.id !== attId);
+      onUpdateCpmi({
+        ...selectedCpmi,
+        attachments: filtered
+      });
+    }
+  };
 
   // Link transactions specifically for the selected CPMI
   const selectedCpmiTransactions = useMemo(() => {
@@ -161,7 +253,7 @@ export default function CpmiDatabase({ cpmis, transactions, onAddCpmi, onUpdateC
     setFormDestination("Taiwan");
     setFormGender("Perempuan");
     setFormCategory("TKW (In Formal)");
-    setFormAgency("PT. TRIAS INSAN MADANI");
+    setFormAgency(ptName || "PT. TRIAS INSAN MADANI");
     setFormRecruiter("");
     setFormNotes("");
     setFormDocs({
@@ -858,6 +950,107 @@ export default function CpmiDatabase({ cpmis, transactions, onAddCpmi, onUpdateC
                   <p className="text-xs text-[#8B6E4E] mt-1.5 font-medium leading-relaxed">{selectedCpmi.notes}</p>
                 </div>
               )}
+
+              {/* ARSIP BERKAS & LAMPIRAN CPMI */}
+              <div className="space-y-3 pt-3 border-t border-natural-accent/20">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-[#8C8479] uppercase tracking-wider font-sans">Arsip Berkas & Lampiran</h4>
+                  <span className="text-[10px] text-natural-primary font-bold bg-neutral-100 border border-natural-accent/30 px-2.5 py-0.5 rounded-full font-mono">
+                    {(selectedCpmi.attachments || []).length} Berkas
+                  </span>
+                </div>
+
+                {/* Dashed Drag/Click Dropzone */}
+                <div
+                  onDragEnter={handleCandDrag}
+                  onDragOver={handleCandDrag}
+                  onDragLeave={handleCandDrag}
+                  onDrop={handleCandDrop}
+                  onClick={() => candFileRef.current?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-1.5 ${
+                    candDragActive
+                      ? "border-natural-primary bg-natural-primary/5"
+                      : "border-natural-accent/50 hover:border-natural-primary/60 hover:bg-natural-pane/40"
+                  }`}
+                >
+                  <input
+                    type="file"
+                    ref={candFileRef}
+                    multiple
+                    onChange={handleCandFileChange}
+                    className="hidden"
+                    id="cand-attachment-input"
+                  />
+                  <div className="w-8 h-8 rounded-full bg-natural-pane flex items-center justify-center text-[#8C8479] border border-natural-accent/20">
+                    <Paperclip className="w-4 h-4 text-natural-primary" />
+                  </div>
+                  <div className="leading-tight">
+                    <p className="text-xs font-bold text-natural-dark">
+                      Klik atau Seret Berkas ke Sini
+                    </p>
+                    <p className="text-[10px] text-[#8C8479]/85 mt-0.5 font-medium">
+                      Mendukung semua format berkas (Maks. 3 MB)
+                    </p>
+                  </div>
+                </div>
+
+                {/* List of attachments */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {!(selectedCpmi.attachments && selectedCpmi.attachments.length > 0) ? (
+                    <p className="text-xs text-[#8C8479] italic text-center py-2.5">
+                      Belum ada berkas lampiran terarsip untuk kandidat ini.
+                    </p>
+                  ) : (
+                    selectedCpmi.attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex justify-between items-center bg-neutral-50 p-2.5 rounded-xl border border-natural-accent/25 hover:border-natural-accent/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0 pr-2">
+                          <div className="p-1.5 bg-white/70 rounded-lg text-natural-secondary border border-natural-accent/15 shrink-0">
+                            <FileText className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-natural-dark truncate" title={att.name}>
+                              {att.name}
+                            </p>
+                            <p className="text-[9px] text-[#8C8479] font-mono mt-0.5 font-bold">
+                              {Math.round(att.size / 1024)} KB &bull; {new Date(att.uploadedAt).toLocaleDateString("id-ID")}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* BLUE DOWNLOAD BUTTON */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadAttachment(att);
+                            }}
+                            title="Unduh Berkas"
+                            className="p-1 px-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95"
+                          >
+                            <Download className="w-3 h-3 text-white" />
+                            Unduh
+                          </button>
+                          
+                          {/* Delete attachment button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteAttachment(att.id);
+                            }}
+                            title="Hapus Berkas"
+                            className="p-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           ) : (
             

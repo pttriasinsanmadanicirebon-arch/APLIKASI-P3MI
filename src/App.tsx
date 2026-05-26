@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { CPMI, Transaction } from "./types";
+import { CPMI, Transaction, AppUser } from "./types";
 import { SEED_CPMIS, SEED_TRANSACTIONS } from "./data/seedData";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -14,15 +14,54 @@ import CpmiDatabase from "./components/CpmiDatabase";
 import TransaksiBukuKas from "./components/TransaksiBukuKas";
 import LaporanKeuangan from "./components/LaporanKeuangan";
 import ImportForm from "./components/ImportForm";
+import PengaturanPt from "./components/PengaturanPt";
+import LoginScreen from "./components/LoginScreen";
 
 // Icons
 import { 
   BarChart3, Users, BookOpen, FileSpreadsheet, FileText, 
-  Settings, RefreshCw, Layers, Plane, Globe, HelpCircle 
+  Settings, RefreshCw, Layers, Plane, Globe, HelpCircle, LogOut
 } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
+
+  // Authentication state
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    try {
+      const saved = localStorage.getItem("CPMI_PORTAL_LOGGED_IN_USER");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem("CPMI_PORTAL_LOGGED_IN_USER");
+  };
+
+  // PT Identity configuration states
+  const [ptName, setPtName] = useState<string>(() => {
+    return localStorage.getItem("CPMI_PORTAL_PT_NAME") || "PT. Trias Insan Madani";
+  });
+  const [ptLogo, setPtLogo] = useState<string | null>(() => {
+    return localStorage.getItem("CPMI_PORTAL_PT_LOGO") || null;
+  });
+
+  const handleUpdatePtName = (name: string) => {
+    setPtName(name);
+    localStorage.setItem("CPMI_PORTAL_PT_NAME", name);
+  };
+
+  const handleUpdatePtLogo = (logo: string | null) => {
+    setPtLogo(logo);
+    if (logo) {
+      localStorage.setItem("CPMI_PORTAL_PT_LOGO", logo);
+    } else {
+      localStorage.removeItem("CPMI_PORTAL_PT_LOGO");
+    }
+  };
 
   // Core synchronized states
   const [cpmis, setCpmis] = useState<CPMI[]>([]);
@@ -118,6 +157,19 @@ export default function App() {
     }
   };
 
+  if (!currentUser) {
+    return (
+      <LoginScreen
+        ptName={ptName}
+        ptLogo={ptLogo}
+        onLoginSuccess={(user: AppUser) => {
+          setCurrentUser(user);
+          localStorage.setItem("CPMI_PORTAL_LOGGED_IN_USER", JSON.stringify(user));
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-natural-bg/95 flex flex-col font-sans" id="app-main-view">
       
@@ -128,12 +180,16 @@ export default function App() {
             {/* Title / Corporate logo info */}
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-natural-primary rounded-xl flex items-center justify-center text-white font-bold tracking-wider relative overflow-hidden shadow-md shrink-0">
-                <Globe className="w-5 h-5 animate-pulse text-white" />
+                {ptLogo ? (
+                  <img src={ptLogo} alt="Logo PT" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                ) : (
+                  <Globe className="w-5 h-5 animate-pulse text-white" />
+                )}
                 <div className="absolute inset-0 bg-white/10 hover:bg-transparent transition-all"></div>
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-extrabold text-natural-dark font-serif tracking-tight uppercase leading-none">
-                  PT. Trias Insan Madani
+                <div className="text-sm font-extrabold text-natural-dark font-serif tracking-tight uppercase leading-none truncate max-w-[180px] sm:max-w-[280px]" title={ptName}>
+                  {ptName}
                 </div>
                 <span className="text-[10px] font-mono text-[#8C8479] font-semibold tracking-wide uppercase block mt-1">
                   Global Human Resource Portal
@@ -147,7 +203,7 @@ export default function App() {
                 <span className="text-[10px] text-[#8C8479] uppercase block font-semibold">Total Terdata</span>
                 <span className="text-base font-bold text-natural-primary">{cpmis.length} CPMI</span>
               </div>
-              <div className="text-right border-r border-natural-accent/40 pr-4">
+              <div className="text-right border-r border-[#8C8479]/20 pr-4">
                 <span className="text-[10px] text-[#8C8479] uppercase block font-semibold font-sans">Ready to Flight</span>
                 <span className="text-base font-bold text-natural-secondary">
                   {cpmis.filter(c => c.status.toLowerCase().includes("flight") || c.status.toLowerCase().includes("terbang")).length} CPMI
@@ -155,12 +211,29 @@ export default function App() {
               </div>
               <button
                 onClick={handleResetToSeeds}
-                className="text-xs text-natural-text/85 hover:text-natural-secondary flex items-center gap-1.5 px-3 py-1.5 bg-natural-pane hover:bg-natural-accent/40 rounded-xl transition-all border border-natural-accent/20 cursor-pointer"
+                className="text-xs text-natural-text hover:text-natural-secondary flex items-center gap-1.5 px-3 py-1.5 bg-neutral-100 hover:bg-natural-accent/40 rounded-xl transition-all border border-natural-accent/20 cursor-pointer"
                 title="Atur ulang database ke versi bawaan data awal"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Reset Bawaan
               </button>
+
+              {/* Logged in User Badge & LogOut */}
+              <div className="flex items-center gap-2.5 pl-3 border-l border-natural-accent/30 shrink-0">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-bold text-natural-dark leading-none">{currentUser.name}</p>
+                  <span className="text-[9px] text-[#4B6584] font-mono font-bold uppercase tracking-wider block mt-1">
+                    {currentUser.role}
+                  </span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  title="Keluar dari Portal"
+                  className="p-2 text-rose-500 hover:text-rose-600 hover:bg-[#FDF7F7] rounded-xl transition-all border border-transparent hover:border-rose-200 cursor-pointer flex items-center justify-center shrink-0"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -176,6 +249,7 @@ export default function App() {
               { id: "transaksi", label: "Buku Kas Kasir", icon: BookOpen },
               { id: "laporan", label: "Laporan & Laba", icon: FileSpreadsheet },
               { id: "import", label: "Batch Import", icon: FileText },
+              { id: "pengaturan-pt", label: "Pengaturan PT", icon: Settings },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -216,6 +290,7 @@ export default function App() {
                 cpmis={cpmis} 
                 transactions={transactions} 
                 onNavigate={setActiveTab} 
+                ptName={ptName}
               />
             )}
             {activeTab === "cpmi" && (
@@ -224,6 +299,7 @@ export default function App() {
                 transactions={transactions} 
                 onAddCpmi={handleAddCpmi} 
                 onUpdateCpmi={handleUpdateCpmi} 
+                ptName={ptName}
               />
             )}
             {activeTab === "transaksi" && (
@@ -238,12 +314,22 @@ export default function App() {
               <LaporanKeuangan 
                 cpmis={cpmis} 
                 transactions={transactions} 
+                ptName={ptName}
               />
             )}
             {activeTab === "import" && (
               <ImportForm 
                 onImportCpmis={handleImportCpmis} 
                 onImportTransactions={handleImportTransactions} 
+              />
+            )}
+            {activeTab === "pengaturan-pt" && (
+              <PengaturanPt
+                ptName={ptName}
+                onUpdatePtName={handleUpdatePtName}
+                ptLogo={ptLogo}
+                onUpdatePtLogo={handleUpdatePtLogo}
+                currentUser={currentUser}
               />
             )}
           </motion.div>
@@ -254,7 +340,7 @@ export default function App() {
       {/* FOOTER STATEMENTS COMPACT */}
       <footer className="bg-white border-t border-natural-accent/30 py-4 text-center text-[10px] text-[#8C8479] font-mono print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row justify-between items-center gap-2">
-          <span>&copy; {new Date().getFullYear()} PT. Trias Insan Madani. Hak Cipta Dilindungi Undang-Undang.</span>
+          <span>&copy; {new Date().getFullYear()} {ptName}. Hak Cipta Dilindungi Undang-Undang.</span>
           <span className="flex items-center gap-1.5">
             <Layers className="w-3.5 h-3.5 text-natural-primary" />
             Keamanan Data Lunas &bull; Penyimpanan di Browser Lokal Anda

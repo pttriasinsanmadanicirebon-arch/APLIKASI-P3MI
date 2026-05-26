@@ -7,14 +7,14 @@
   --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
   
-  --color-natural-bg: #FDFBF7;
-  --color-natural-text: #4A443F;
-  --color-natural-primary: #7D8F69;
-  --color-natural-primary-hover: #6A7B58;
-  --color-natural-secondary: #C27B63;
-  --color-natural-accent: #E5D3B3;
-  --color-natural-pane: #F9F6F1;
-  --color-natural-dark: #2D2926;
+  --color-natural-bg: #F7F5F2;
+  --color-natural-text: #212529;
+  --color-natural-primary: #1F3A5F;
+  --color-natural-primary-hover: #152A4A;
+  --color-natural-secondary: #4B6584;
+  --color-natural-accent: #E2DDD5;
+  --color-natural-pane: #FFFFFF;
+  --color-natural-dark: #12253F;
 }
 
 body {
@@ -43,10 +43,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #E5D3B3;
+  background: #E2DDD5;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #7D8F69;
+  background: #1F3A5F;
 }

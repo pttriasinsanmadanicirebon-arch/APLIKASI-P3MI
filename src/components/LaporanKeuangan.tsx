@@ -4,6 +4,7 @@
  */
 
 import React, { useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import { CPMI, Transaction } from "../types";
 import { formatRupiah } from "../data/seedData";
 import { 
@@ -14,6 +15,7 @@ import {
 interface Props {
   cpmis: CPMI[];
   transactions: Transaction[];
+  ptName?: string;
 }
 
 interface CpmiCostSummary {
@@ -26,7 +28,7 @@ interface CpmiCostSummary {
   txCount: number;
 }
 
-export default function LaporanKeuangan({ cpmis, transactions }: Props) {
+export default function LaporanKeuangan({ cpmis, transactions, ptName }: Props) {
   // Filtration inside reporting page
   const [reportSearch, setReportSearch] = useState("");
   const [minSpentFilter, setMinSpentFilter] = useState("0");
@@ -137,15 +139,92 @@ export default function LaporanKeuangan({ cpmis, transactions }: Props) {
     window.print();
   };
 
-  // Export JSON Backup file
-  const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ cpmis, transactions }, null, 2));
-    const downloadAnchor = document.createElement("a");
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `CPMI_Finance_Report_${new Date().toISOString().substring(0, 10)}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  // Export Excel Report file
+  const handleExportExcel = () => {
+    // 1. Create a beautiful corporate sheet for PT Financial Summary Metrics
+    const summaryData = [
+      { "METRIK LAPORAN KEANGAN": `LAPORAN KAS UTAMA - ${ptName || "PT. Trias Insan Madani"}`, "NILAI / DETAIL": "" },
+      { "METRIK LAPORAN KEANGAN": "Tanggal Ekspor Laporan", "NILAI / DETAIL": new Date().toLocaleDateString("id-ID", { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) },
+      { "METRIK LAPORAN KEANGAN": "Total Seluruh Dana Keluar (Budget Outflow)", "NILAI / DETAIL": formatRupiah(totalFinancialSpent) },
+      { "METRIK LAPORAN KEANGAN": "Total Investasi Langsung CPMI", "NILAI / DETAIL": formatRupiah(totalCandidateSpentSum) },
+      { "METRIK LAPORAN KEANGAN": "Total Operasional & Overhead Kantor", "NILAI / DETAIL": formatRupiah(generalOfficeCosts) },
+      { "METRIK LAPORAN KEANGAN": "Persentase Penyaluran Dana Langsung", "NILAI / DETAIL": `${Math.round((totalCandidateSpentSum / (totalFinancialSpent || 1)) * 100)}% dari total anggaran` },
+      { "METRIK LAPORAN KEANGAN": "Jumlah CPMI Terdata Didanai", "NILAI / DETAIL": `${activeCpmisWithTx} CPMI` },
+      { "METRIK LAPORAN KEANGAN": "Rata-rata Pengeluaran Per CPMI", "NILAI / DETAIL": formatRupiah(averageSpentPerCandidate) },
+      { "METRIK LAPORAN KEANGAN": "Status Regulasi", "NILAI / DETAIL": "PP No. 22 Tahun 2021 Compliant & Secure" },
+    ];
+
+    // 2. Breakdown per CPMI sheet
+    const cpmiSheetData = filteredSummaries.map((sum) => {
+      const feeSponsor = sum.categoryAmounts["Fee Sponsor"] || 0;
+      const mdAndPaspor = (sum.categoryAmounts["Biaya MD"] || 0) + (sum.categoryAmounts["ID Paspor"] || 0);
+      const livingAndMcu = (sum.categoryAmounts["Living Cost"] || 0) + (sum.categoryAmounts["Mcu Pra"] || 0) + (sum.categoryAmounts["Transport"] || 0);
+      
+      let otherTotal = 0;
+      Object.entries(sum.categoryAmounts).forEach(([cat, val]) => {
+        if (!["Fee Sponsor", "Biaya MD", "ID Paspor", "Living Cost", "Mcu Pra", "Transport"].includes(cat)) {
+          otherTotal += Number(val) || 0;
+        }
+      });
+
+      return {
+        "ID CPMI": sum.id,
+        "Nama Kandidat": sum.name,
+        "Sponsor PL (Recruiter)": sum.recruiter,
+        "Status Berkas": sum.status,
+        "Fee Sponsor": formatRupiah(feeSponsor),
+        "Biaya MD & Paspor": formatRupiah(mdAndPaspor),
+        "Living Cost, Transport & MCU": formatRupiah(livingAndMcu),
+        "Keterangan Lain / Royalti": formatRupiah(otherTotal),
+        "Total Pengeluaran Kas": formatRupiah(sum.totalSpent),
+        "Jumlah Transaksi Terkait": sum.txCount,
+      };
+    });
+
+    // 3. Complete raw Transaction log sheet
+    const rawTxData = transactions.map((t) => {
+      return {
+        "ID Transaksi": t.id,
+        "Referensi CPMI (ID)": t.pmiRef,
+        "Nama Kandidat / CPMI": t.pmiName || "OPERASIONAL",
+        "Kategori Pengeluaran": t.category,
+        "Tanggal": t.date,
+        "Jumlah Pengeluaran": formatRupiah(t.value),
+        "No Referensi": t.noReff || "-",
+        "Keterangan Tambahan": t.description || "-"
+      };
+    });
+
+    const workbook = XLSX.utils.book_new();
+
+    const sheetSummary = XLSX.utils.json_to_sheet(summaryData);
+    const sheetCpmi = XLSX.utils.json_to_sheet(cpmiSheetData);
+    const sheetTransactions = XLSX.utils.json_to_sheet(rawTxData);
+
+    const setColWidths = (sheet: any) => {
+      sheet["!cols"] = [
+        { wch: 35 },
+        { wch: 30 },
+        { wch: 25 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 20 },
+        { wch: 25 },
+        { wch: 25 },
+        { wch: 20 },
+        { wch: 15 },
+      ];
+    };
+    
+    setColWidths(sheetSummary);
+    setColWidths(sheetCpmi);
+    setColWidths(sheetTransactions);
+
+    XLSX.utils.book_append_sheet(workbook, sheetSummary, "Executive Summary");
+    XLSX.utils.book_append_sheet(workbook, sheetCpmi, "Breakdown Per CPMI");
+    XLSX.utils.book_append_sheet(workbook, sheetTransactions, "Seluruh Riwayat Buku Kas");
+
+    XLSX.writeFile(workbook, `${(ptName || "PT_Trias_Insan_Madani").replace(/\s+/g, "_")}_Laporan_Keuangan_${new Date().toISOString().substring(0, 10)}.xlsx`);
   };
 
   return (
@@ -154,19 +233,19 @@ export default function LaporanKeuangan({ cpmis, transactions }: Props) {
       {/* Top Banner Report */}
       <div className="bg-white p-6 rounded-3xl border border-natural-accent/30 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-xl font-bold text-natural-dark font-serif animate-fade-in">Laporan Konsolidasi & Rekapitulasi Keuangan</h2>
+          <h2 className="text-xl font-bold text-natural-dark font-serif animate-fade-in">{ptName || "PT. Trias Insan Madani"} - Laporan Konsolidasi & Rekapitulasi Keuangan</h2>
           <p className="text-xs text-[#8C8479] mt-1">Audit operasional per-kepala CPMI, pengeluaran overhead kantor, dan rasio penyebaran dana sponsor.</p>
         </div>
         
         {/* Tools action */}
         <div className="flex flex-wrap gap-2.5 shrink-0">
           <button
-            onClick={handleExportJSON}
-            className="p-3 bg-natural-pane border border-natural-accent/30 hover:bg-natural-accent/25 rounded-xl text-xs font-bold text-natural-dark flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Download full database audit backup"
+            onClick={handleExportExcel}
+            className="p-3 bg-[#1F3A5F] hover:bg-[#152A4A] border border-[#162943] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm animate-pulse"
+            title="Download full database audit excel report"
           >
-            <Download className="w-4 h-4 text-natural-primary" />
-            Ekspor JSON Backup
+            <Download className="w-4 h-4 text-[#E2DDD5]" />
+            Ekspor Excel Laporan Lengkap
           </button>
           
           <button
