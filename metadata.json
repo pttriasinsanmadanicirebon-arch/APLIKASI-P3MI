@@ -1,0 +1,6 @@
+{
+  "name": "Portal Manajemen CPMI",
+  "description": "Aplikasi profesional proses manajemen data CPMI (Calon Pekerja Migran Indonesia), status berkas operasional, dan laporan keuangan transaksi kas harian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
